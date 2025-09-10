@@ -1,0 +1,36 @@
+mqtt:
+  server: your-mqtt-server
+  port: 1883
+  basetopic: mqttcim
+  user: your-username
+  password: your-password
+  client: mqtt-camera-monitor
+
+openai:
+  endpoint: https://apiurl.com/chat/completions
+  api_token: your-api-token
+  model: "gpt-4-vision-preview"  # or whatever model your endpoint supports
+
+cameras:
+  frontdoor:
+    endpoint: rtsp://user:pass@192.168.1.50:554/stream1
+    prompt: |
+      You are given a photo from a gate surveillance camera. The gate is located at the top of the image. There are usually two bins at the bottom of the image: a yellow bin (larger, with a yellow lid) and a red bin (smaller, with a red lid). While these bins are most often arranged with the yellow bin on the right and the red bin on the left, do not assume this unless visibility is poor and you cannot distinguish the bin lid colors.
+
+      Tasks:
+      1. Check if the gate at the top of the image is open. If open, set "GateOpen" to "Yes", otherwise to "No".
+      2. Check if the yellow bin (larger bin with a yellow lid) is present at the bottom of the image. If bin lid color is not visible (e.g., night vision), infer its presence by the rightmost bin’s position. If only one bin is present and is in the rightmost position, assume it's the yellow bin. If a gap is visible between the right bin and the crate on the left, infer if the left (red) bin is missing.
+      3. Check if the red bin (smaller, red lid) is present at the bottom of the image. If bin lid color is not visible (e.g., night vision), infer its presence by the leftmost bin’s position (next to the crate). If only one bin is present and a gap exists next to the crate, infer the red bin is missing.
+      4. If visibility is poor due to night vision, weather, or camera quality, and you cannot be certain of a bin or the gate, set the value to "Unknown" instead of "Yes" or "No". Also, add a "Visibility" field with values "Good", "Poor", or "Unknown" to indicate how clear the image is.
+
+      Output format:  
+      Return your response as pure JSON, with no extra formatting, commentary, or backticks—only the JSON object as shown below.
+      Example:
+      {
+        "GateOpen": "Yes" or "No" or "Unknown",
+        "YellowBinPresent": "Yes" or "No" or "Unknown",
+        "RedBinPresent": "Yes" or "No" or "Unknown",
+        "Visibility": "Good" or "Poor" or "Unknown"
+      }
+
+      (Replace the values as appropriate for your assessment.)

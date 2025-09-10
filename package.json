@@ -1,0 +1,29 @@
+{
+  "name": "mqtt-camera-ai-monitor",
+  "version": "1.0.0",
+  "description": "A tool to monitor MQTT channels, capture images from RTSP cameras, and interact with OpenAI.",
+  "main": "dist/app.js",
+  "scripts": {
+    "start": "ts-node src/app.ts",
+    "build": "tsc",
+    "docker:build": "docker build -t mqtt-camera-ai-monitor .",
+    "docker:run": "docker run -p 3000:3000 mqtt-camera-ai-monitor"
+  },
+  "dependencies": {
+    "mqtt": "^5.0.0",
+    "axios": "^1.6.0",
+    "ts-node": "^10.0.0",
+    "typescript": "^4.4.4",
+    "ffmpeg-static": "^4.4.0",
+    "winston": "^3.10.0",
+    "js-yaml": "^4.1.0",
+    "form-data": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/mqtt": "^2.5.0",
+    "@types/node": "^20.0.0",
+    "@types/js-yaml": "^4.0.5"
+  },
+  "author": "Stewart Cossey",
+  "license": "MIT"
+}
