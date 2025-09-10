@@ -51,7 +51,6 @@ export class AiService {
 
             logger.info(`Sending request to AI endpoint: ${this.endpoint}`);
             logger.debug(`Request body prepared with model: ${requestBody.model}`);
-            logger.debug(`Request payload: ${JSON.stringify(requestBody, null, 2)}`);
             
             const response = await axios.post(this.endpoint, requestBody, {
                 headers: {
@@ -65,14 +64,6 @@ export class AiService {
             logger.debug(`AI response status: ${response.status}`);
             logger.debug(`AI response data: ${JSON.stringify(response.data)}`);
             
-            // Clean up the temporary image file
-            try {
-                fs.unlinkSync(imagePath);
-                logger.debug(`Temporary image file deleted: ${imagePath}`);
-            } catch (cleanupError) {
-                logger.warn(`Failed to delete temporary image file: ${cleanupError}`);
-            }
-            
             return response.data;
         } catch (error: unknown) {
             logger.error(`AI service error: ${error}`);
@@ -83,14 +74,6 @@ export class AiService {
                 logger.error(`AI service HTTP error data: ${JSON.stringify(error.response?.data)}`);
             } else if (error instanceof Error) {
                 logger.error(`AI service error message: ${error.message}`);
-            }
-            
-            // Clean up the temporary image file even on error
-            try {
-                fs.unlinkSync(imagePath);
-                logger.debug(`Temporary image file deleted after error: ${imagePath}`);
-            } catch (cleanupError) {
-                logger.warn(`Failed to delete temporary image file after error: ${cleanupError}`);
             }
             
             throw error;

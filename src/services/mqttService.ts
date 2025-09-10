@@ -22,6 +22,9 @@ export class MqttService extends EventEmitter {
     private initializeConnection() {
         try {
             logger.info(`Connecting to MQTT broker at ${this.config.server}:${this.config.port}`);
+            
+            const onlineTopic = `${this.config.basetopic}/Online`;
+            
             this.client = connect(`mqtt://${this.config.server}:${this.config.port}`, {
                 username: this.config.user,
                 password: this.config.password,
@@ -30,12 +33,23 @@ export class MqttService extends EventEmitter {
                 connectTimeout: 30000,
                 keepalive: 60,
                 clean: true,
-                rejectUnauthorized: false
+                rejectUnauthorized: false,
+                // Last Will and Testament configuration
+                will: {
+                    topic: onlineTopic,
+                    payload: 'NO',
+                    qos: 1,
+                    retain: true
+                }
             });
 
             this.client.on('connect', () => {
                 logger.info('Connected to MQTT broker successfully');
                 this.reconnectAttempts = 0;
+                
+                // Publish online status as "YES" when connected
+                this.publish(onlineTopic, 'YES', true);
+                logger.info(`Published online status to: ${onlineTopic}`);
                 
                 // Subscribe to both wildcard pattern and debug with all messages
                 const triggerPattern = `${this.config.basetopic}/+/trigger`;
@@ -187,6 +201,22 @@ export class MqttService extends EventEmitter {
             logger.info(`Subscribing to specific trigger topic: "${triggerTopic}"`);
             this.subscribe(triggerTopic);
         });
+    }
+
+    public gracefulShutdown() {
+        logger.info('Performing graceful MQTT shutdown...');
+        if (this.client && this.client.connected) {
+            const onlineTopic = `${this.config.basetopic}/Online`;
+            // Publish offline status before disconnecting
+            this.client.publish(onlineTopic, 'NO', { retain: true }, (err) => {
+                if (err) {
+                    logger.error(`Failed to publish offline status: ${err.message}`);
+                } else {
+                    logger.info('Published offline status');
+                }
+                this.client.end();
+            });
+        }
     }
 
     public connect() {

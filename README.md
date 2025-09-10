@@ -36,7 +36,7 @@ When a trigger command is received, it will capture an image from the configured
 
 ## Docker
 
-Map your config to the `/usr/src/app/config/` folder in the container.
+Map your config to the `/usr/src/app/` folder in the container.
 
 ## Contributing
 

@@ -35,9 +35,11 @@ async function handleTrigger(cameraName: string) {
     const cameraConfig = config.cameras[cameraName];
 
     if (cameraConfig) {
+        let imagePath: string | null = null;
+        
         try {
             logger.info(`Capturing image from camera: ${cameraName} at ${cameraConfig.endpoint}`);
-            const imagePath = await cameraService.captureImage(cameraConfig.endpoint);
+            imagePath = await cameraService.captureImage(cameraConfig.endpoint);
             logger.info(`Image captured successfully: ${imagePath}`);
 
             // Read the image file as binary data for MQTT publishing
@@ -62,17 +64,47 @@ async function handleTrigger(cameraName: string) {
             // Publish AI response with retention
             mqttService.publish(`${config.mqtt.basetopic}/${cameraName}/ai`, aiContent, true);
             
+            // Clean up the temporary image file
+            if (imagePath) {
+                cameraService.cleanupImageFile(imagePath);
+                imagePath = null; // Mark as cleaned up
+            }
+            
             // Reset trigger state to "NO" (retained)
             mqttService.publish(`${config.mqtt.basetopic}/${cameraName}/trigger`, 'NO', true);
             
             logger.info(`Trigger processing completed for camera: ${cameraName}`);
         } catch (error) {
             logger.error(`Error processing trigger for camera ${cameraName}: ${error}`);
+            
+            // Clean up the temporary image file even on error
+            if (imagePath) {
+                cameraService.cleanupImageFile(imagePath);
+            }
+            
             // Reset trigger state even on error
             mqttService.publish(`${config.mqtt.basetopic}/${cameraName}/trigger`, 'NO', true);
         }
     } else {
         logger.warn(`No configuration found for camera: ${cameraName}`);
+    }
+}
+
+// Graceful shutdown function
+async function gracefulShutdown(signal: string) {
+    logger.info(`Received ${signal}, shutting down gracefully...`);
+    
+    try {
+        mqttService.gracefulShutdown();
+        
+        // Give MQTT client time to send the offline message
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        logger.info('Graceful shutdown completed');
+        process.exit(0);
+    } catch (error) {
+        logger.error(`Error during graceful shutdown: ${error}`);
+        process.exit(1);
     }
 }
 
@@ -83,14 +115,13 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 // Handle process termination
-process.on('SIGINT', () => {
-    logger.info('Received SIGINT, shutting down gracefully...');
-    process.exit(0);
-});
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 
-process.on('SIGTERM', () => {
-    logger.info('Received SIGTERM, shutting down gracefully...');
-    process.exit(0);
+// Handle uncaught exceptions
+process.on('uncaughtException', (error) => {
+    logger.error(`Uncaught Exception: ${error}`);
+    gracefulShutdown('uncaughtException');
 });
 
 logger.info('Starting application...');

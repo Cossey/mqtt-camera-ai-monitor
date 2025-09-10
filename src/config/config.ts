@@ -3,7 +3,7 @@ import path from 'path';
 import yaml from 'js-yaml';
 import { Config } from '../types';
 
-const configPath = path.join(__dirname, '../../config/config.yaml');
+const configPath = path.join(__dirname, '../../config.yaml');
 
 const loadConfig = (): Config => {
   try {
