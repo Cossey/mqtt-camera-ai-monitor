@@ -23,7 +23,7 @@ export class MqttService extends EventEmitter {
         try {
             logger.info(`Connecting to MQTT broker at ${this.config.server}:${this.config.port}`);
             
-            const onlineTopic = `${this.config.basetopic}/Online`;
+            const onlineTopic = `${this.config.basetopic}/online`;
             
             this.client = connect(`mqtt://${this.config.server}:${this.config.port}`, {
                 username: this.config.user,
