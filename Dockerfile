@@ -12,8 +12,6 @@ COPY package*.json ./
 # Install dependencies
 RUN npm install
 
-RUN echo "Files in build context:" && ls -la /
-
 # Copy TypeScript configuration
 COPY tsconfig.json ./
 
