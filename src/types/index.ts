@@ -13,9 +13,33 @@ export interface OpenAiConfig {
   model: string; // Add model configuration
 }
 
+export interface JsonSchemaProperty {
+  type: string;
+  description?: string;
+  enum?: string[];
+}
+
+export interface JsonSchema {
+  type: string;
+  properties: Record<string, JsonSchemaProperty>;
+  additionalProperties: boolean;
+  required: string[];
+}
+
+export interface ResponseFormatSchema {
+  type: string;
+  json_schema: {
+    name: string;
+    strict: boolean;
+    schema: JsonSchema;
+  };
+}
+
 export interface CameraConfig {
   endpoint: string;
   prompt: string;
+  output?: Record<string, JsonSchemaProperty>; // Simplified user provided structured output schema
+  response_format?: ResponseFormatSchema; // Fully generated structured output response format schema
 }
 
 export interface Config {
