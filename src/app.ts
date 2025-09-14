@@ -12,17 +12,17 @@ const aiService = new AiService(config.openai.endpoint, config.openai.api_token,
 async function initialize() {
     try {
         logger.info('Starting MQTT Camera AI Monitor application...');
-        
+
         mqttService.on('connected', () => {
             logger.info('MQTT connection established, initializing channels...');
             mqttService.initializeChannels(config.cameras);
-            
+
             // Also subscribe to specific camera topics as backup
             mqttService.subscribeToSpecificCameras(config.cameras);
         });
-        
+
         mqttService.on('trigger', handleTrigger);
-        
+
         logger.info('Application initialization complete, waiting for MQTT connection...');
     } catch (error) {
         logger.error('Failed to initialize application: ' + error);
@@ -36,7 +36,7 @@ async function handleTrigger(cameraName: string) {
 
     if (cameraConfig) {
         let imagePath: string | null = null;
-        
+
         try {
             logger.info(`Capturing image from camera: ${cameraName} at ${cameraConfig.endpoint}`);
             imagePath = await cameraService.captureImage(cameraConfig.endpoint);
@@ -53,35 +53,40 @@ async function handleTrigger(cameraName: string) {
 
             // Now send to AI service for processing
             logger.info(`Sending image to AI service for processing...`);
-            const aiResponse = await aiService.sendImageAndPrompt(imagePath, cameraConfig.prompt);
+            const aiResponse = await aiService.sendImageAndPrompt(
+                imagePath,
+                cameraConfig.prompt,
+                cameraConfig.response_format
+            );
             logger.info(`AI processing completed for camera: ${cameraName}`);
-            
+
             // Extract the AI response content
-            const aiContent = aiResponse.choices && aiResponse.choices.length > 0 
-                ? aiResponse.choices[0].message.content 
-                : 'No response generated';
-            
+            const aiContent =
+                aiResponse.choices && aiResponse.choices.length > 0
+                    ? aiResponse.choices[0].message.content
+                    : 'No response generated';
+
             // Publish AI response with retention
             mqttService.publish(`${config.mqtt.basetopic}/${cameraName}/ai`, aiContent, true);
-            
+
             // Clean up the temporary image file
             if (imagePath) {
                 cameraService.cleanupImageFile(imagePath);
                 imagePath = null; // Mark as cleaned up
             }
-            
+
             // Reset trigger state to "NO" (retained)
             mqttService.publish(`${config.mqtt.basetopic}/${cameraName}/trigger`, 'NO', true);
-            
+
             logger.info(`Trigger processing completed for camera: ${cameraName}`);
         } catch (error) {
             logger.error(`Error processing trigger for camera ${cameraName}: ${error}`);
-            
+
             // Clean up the temporary image file even on error
             if (imagePath) {
                 cameraService.cleanupImageFile(imagePath);
             }
-            
+
             // Reset trigger state even on error
             mqttService.publish(`${config.mqtt.basetopic}/${cameraName}/trigger`, 'NO', true);
         }
@@ -93,13 +98,13 @@ async function handleTrigger(cameraName: string) {
 // Graceful shutdown function
 async function gracefulShutdown(signal: string) {
     logger.info(`Received ${signal}, shutting down gracefully...`);
-    
+
     try {
         mqttService.gracefulShutdown();
-        
+
         // Give MQTT client time to send the offline message
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+
         logger.info('Graceful shutdown completed');
         process.exit(0);
     } catch (error) {

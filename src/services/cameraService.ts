@@ -21,17 +21,17 @@ export class CameraService {
             // FFmpeg command with high quality settings
             const command = `ffmpeg -i "${rtspUrl}" -vframes 1 -q:v 1 -compression_level 0 -y "${outputFilePath}"`;
             logger.debug(`Executing ffmpeg command: ${command}`);
-            
+
             await execPromise(command);
-            
+
             // Verify the file was created and get its size
             const stats = fs.statSync(outputFilePath);
             logger.info(`Image captured successfully: ${outputFilePath} (${stats.size} bytes)`);
-            
+
             return outputFilePath;
         } catch (error) {
             logger.error(`Error capturing image from camera: ${error}`);
-            
+
             // Clean up any partial file that might have been created
             try {
                 if (fs.existsSync(outputFilePath)) {
@@ -41,7 +41,7 @@ export class CameraService {
             } catch (cleanupError) {
                 logger.warn(`Failed to clean up partial file: ${cleanupError}`);
             }
-            
+
             throw new Error('Image capture failed');
         }
     }

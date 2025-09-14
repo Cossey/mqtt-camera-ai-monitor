@@ -22,15 +22,20 @@ cameras:
       2. Check if the yellow bin (larger bin with a yellow lid) is present at the bottom of the image. If bin lid color is not visible (e.g., night vision), infer its presence by the rightmost bin’s position. If only one bin is present and is in the rightmost position, assume it's the yellow bin. If a gap is visible between the right bin and the crate on the left, infer if the left (red) bin is missing.
       3. Check if the red bin (smaller, red lid) is present at the bottom of the image. If bin lid color is not visible (e.g., night vision), infer its presence by the leftmost bin’s position (next to the crate). If only one bin is present and a gap exists next to the crate, infer the red bin is missing.
       4. If visibility is poor due to night vision, weather, or camera quality, and you cannot be certain of a bin or the gate, set the value to "Unknown" instead of "Yes" or "No". Also, add a "Visibility" field with values "Good", "Poor", or "Unknown" to indicate how clear the image is.
-
-      Output format:  
-      Return your response as pure JSON, with no extra formatting, commentary, or backticks—only the JSON object as shown below.
-      Example:
-      {
-        "GateOpen": "Yes" or "No" or "Unknown",
-        "YellowBinPresent": "Yes" or "No" or "Unknown",
-        "RedBinPresent": "Yes" or "No" or "Unknown",
-        "Visibility": "Good" or "Poor" or "Unknown"
-      }
-
-      (Replace the values as appropriate for your assessment.)
+    output:
+        GateOpen:
+            type: string
+            description: "Is the gate open?"
+            enum: ["Yes", "No", "Unknown"]
+        YellowBinPresent:
+            type: string
+            description: "Is the Yellow Bin present"
+            enum: ["Yes", "No", "Unknown"]
+        RedBinPresent:
+            type: string
+            description: "Is the Red Bin present"
+            enum: ["Yes", "No", "Unknown"]
+        Visibility:
+            type: string
+            description: "What is the visibility condition"
+            enum: ["Good", "Poor", "Unknown"]
