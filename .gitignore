@@ -112,3 +112,7 @@ dist/
 temp_*.jpg
 temp_*.png
 temp_*.jpeg
+
+# Configuration files
+!*.sample
+config.yaml
