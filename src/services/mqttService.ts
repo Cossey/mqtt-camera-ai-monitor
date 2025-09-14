@@ -209,7 +209,7 @@ export class MqttService extends EventEmitter {
     public gracefulShutdown() {
         logger.info('Performing graceful MQTT shutdown...');
         if (this.client && this.client.connected) {
-            const onlineTopic = `${this.config.basetopic}/Online`;
+            const onlineTopic = `${this.config.basetopic}/online`;
             // Publish offline status before disconnecting
             this.client.publish(onlineTopic, 'NO', { retain: true }, (err) => {
                 if (err) {
