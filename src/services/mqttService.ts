@@ -22,9 +22,9 @@ export class MqttService extends EventEmitter {
     private initializeConnection() {
         try {
             logger.info(`Connecting to MQTT broker at ${this.config.server}:${this.config.port}`);
-            
+
             const onlineTopic = `${this.config.basetopic}/online`;
-            
+
             this.client = connect(`mqtt://${this.config.server}:${this.config.port}`, {
                 username: this.config.user,
                 password: this.config.password,
@@ -39,28 +39,28 @@ export class MqttService extends EventEmitter {
                     topic: onlineTopic,
                     payload: 'NO',
                     qos: 1,
-                    retain: true
-                }
+                    retain: true,
+                },
             });
 
             this.client.on('connect', () => {
                 logger.info('Connected to MQTT broker successfully');
                 this.reconnectAttempts = 0;
-                
+
                 // Publish online status as "YES" when connected
                 this.publish(onlineTopic, 'YES', true);
                 logger.info(`Published online status to: ${onlineTopic}`);
-                
+
                 // Subscribe to both wildcard pattern and debug with all messages
                 const triggerPattern = `${this.config.basetopic}/+/trigger`;
                 const allPattern = `${this.config.basetopic}/#`; // Subscribe to everything for debugging
-                
+
                 logger.info(`Subscribing to trigger pattern: "${triggerPattern}"`);
                 logger.info(`Subscribing to debug pattern: "${allPattern}"`);
-                
+
                 this.subscribe(triggerPattern);
                 this.subscribe(allPattern); // This will help us see all messages
-                
+
                 this.emit('connected');
             });
 
@@ -81,7 +81,6 @@ export class MqttService extends EventEmitter {
                 logger.info(`Received MQTT message - Topic: "${topic}", Message: "${message.toString()}"`);
                 this.handleMessage(topic, message.toString());
             });
-
         } catch (error) {
             logger.error(`Failed to initialize MQTT connection: ${error}. Retrying in ${this.reconnectInterval}ms...`);
             setTimeout(() => this.initializeConnection(), this.reconnectInterval);
@@ -90,14 +89,16 @@ export class MqttService extends EventEmitter {
 
     private handleMessage(topic: string, message: string) {
         logger.info(`Processing message - Topic: "${topic}", Message: "${message}"`);
-        
+
         // Expected format: <basetopic>/<cameraname>/<topicname>
         const topicParts = topic.split('/');
         logger.debug(`Topic breakdown: [${topicParts.map((part, index) => `${index}:"${part}"`).join(', ')}]`);
-        
+
         // Verify the topic structure matches our expected pattern
         if (topicParts.length < 3) {
-            logger.warn(`Topic "${topic}" has insufficient parts (expected at least 3: basetopic/cameraname/topicname)`);
+            logger.warn(
+                `Topic "${topic}" has insufficient parts (expected at least 3: basetopic/cameraname/topicname)`
+            );
             return;
         }
 
@@ -105,7 +106,9 @@ export class MqttService extends EventEmitter {
         const cameraName = topicParts[1];
         const topicName = topicParts[2];
 
-        logger.debug(`Parsed topic - Basetopic: "${receivedBasetopic}", Camera: "${cameraName}", TopicName: "${topicName}"`);
+        logger.debug(
+            `Parsed topic - Basetopic: "${receivedBasetopic}", Camera: "${cameraName}", TopicName: "${topicName}"`
+        );
 
         // Verify basetopic matches our configuration
         if (receivedBasetopic !== this.config.basetopic) {
@@ -116,7 +119,7 @@ export class MqttService extends EventEmitter {
         // Check if this is a trigger message
         if (topicName === 'trigger') {
             logger.info(`Trigger message detected for camera: "${cameraName}"`);
-            
+
             if (message.toUpperCase() === 'YES') {
                 logger.info(`Trigger condition met for camera: "${cameraName}" - Processing...`);
                 this.emit('trigger', cameraName);
@@ -175,8 +178,8 @@ export class MqttService extends EventEmitter {
     public initializeChannels(cameras: Record<string, any>) {
         logger.info(`Initializing MQTT channels for ${Object.keys(cameras).length} cameras...`);
         logger.info(`Using basetopic: "${this.config.basetopic}"`);
-        
-        Object.keys(cameras).forEach(cameraName => {
+
+        Object.keys(cameras).forEach((cameraName) => {
             const triggerTopic = `${this.config.basetopic}/${cameraName}/trigger`;
             const imageTopic = `${this.config.basetopic}/${cameraName}/image`;
             const aiTopic = `${this.config.basetopic}/${cameraName}/ai`;
@@ -196,7 +199,7 @@ export class MqttService extends EventEmitter {
 
     public subscribeToSpecificCameras(cameras: Record<string, any>) {
         logger.info('Subscribing to specific camera trigger topics...');
-        Object.keys(cameras).forEach(cameraName => {
+        Object.keys(cameras).forEach((cameraName) => {
             const triggerTopic = `${this.config.basetopic}/${cameraName}/trigger`;
             logger.info(`Subscribing to specific trigger topic: "${triggerTopic}"`);
             this.subscribe(triggerTopic);
