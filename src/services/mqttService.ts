@@ -90,31 +90,33 @@ export class MqttService extends EventEmitter {
     private handleMessage(topic: string, message: string) {
         logger.info(`Processing message - Topic: "${topic}", Message: "${message}"`);
 
-        // Expected format: <basetopic>/<cameraname>/<topicname>
-        const topicParts = topic.split('/');
+        // Check if topic starts with our configured basetopic
+        if (!topic.startsWith(this.config.basetopic + '/')) {
+            logger.warn(`Topic "${topic}" does not start with configured basetopic: "${this.config.basetopic}"`);
+            return;
+        }
+
+        // Remove the basetopic from the beginning to get the remaining path
+        const targetTopic = topic.substring(this.config.basetopic.length + 1);
+
+        // Expected format after basetopic removal: <cameraname>/<topicname>
+        const topicParts = targetTopic.split('/');
         logger.debug(`Topic breakdown: [${topicParts.map((part, index) => `${index}:"${part}"`).join(', ')}]`);
 
-        // Verify the topic structure matches our expected pattern
-        if (topicParts.length < 3) {
+        // Verify the remaining topic structure has at least 2 parts (camera/topicname)
+        if (topicParts.length < 2) {
             logger.warn(
-                `Topic "${topic}" has insufficient parts (expected at least 3: basetopic/cameraname/topicname)`
+                `Topic "${targetTopic}" has insufficient parts (expected at least 2: cameraname/topicname)`
             );
             return;
         }
 
-        const receivedBasetopic = topicParts[0];
-        const cameraName = topicParts[1];
-        const topicName = topicParts[2];
+        const cameraName = topicParts[0];
+        const topicName = topicParts[1];
 
         logger.debug(
-            `Parsed topic - Basetopic: "${receivedBasetopic}", Camera: "${cameraName}", TopicName: "${topicName}"`
+            `Parsed topic - Camera: "${cameraName}", TopicName: "${topicName}"`
         );
-
-        // Verify basetopic matches our configuration
-        if (receivedBasetopic !== this.config.basetopic) {
-            logger.warn(`Basetopic mismatch - Expected: "${this.config.basetopic}", Received: "${receivedBasetopic}"`);
-            return;
-        }
 
         // Check if this is a trigger message
         if (topicName === 'trigger') {
@@ -209,7 +211,7 @@ export class MqttService extends EventEmitter {
     public gracefulShutdown() {
         logger.info('Performing graceful MQTT shutdown...');
         if (this.client && this.client.connected) {
-            const onlineTopic = `${this.config.basetopic}/online`;
+            const onlineTopic = `${this.config.basetopic}/Online`;
             // Publish offline status before disconnecting
             this.client.publish(onlineTopic, 'NO', { retain: true }, (err) => {
                 if (err) {
