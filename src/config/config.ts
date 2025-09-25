@@ -2,6 +2,43 @@ import fs from 'fs';
 import path from 'path';
 import yaml from 'js-yaml';
 import { Config } from '../types';
+import { logger } from '../utils/logger';
+
+// Add sanitization helper
+const sanitizeConfig = (config: Config): any => {
+    return {
+        ...config,
+        mqtt: {
+            ...config.mqtt,
+            password: config.mqtt.password ? '*****' : undefined,
+        },
+        openai: {
+            ...config.openai,
+            api_token: config.openai.api_token ? '*****' : undefined,
+        },
+        cameras: Object.fromEntries(
+            Object.entries(config.cameras).map(([name, camera]) => [
+                name,
+                {
+                    ...camera,
+                    endpoint: sanitizeRtspUrl(camera.endpoint),
+                },
+            ])
+        ),
+    };
+};
+
+const sanitizeRtspUrl = (rtspUrl: string): string => {
+    try {
+        const url = new URL(rtspUrl);
+        if (url.username || url.password) {
+            return `${url.protocol}//*****:*****@${url.hostname}${url.port ? `:${url.port}` : ''}${url.pathname}${url.search || ''}`;
+        }
+        return rtspUrl;
+    } catch (error) {
+        return rtspUrl.replace(/rtsp:\/\/.*/, 'rtsp://*****:*****@*****/****');
+    }
+};
 
 const loadConfig = (): Config => {
     let configPath: string;
@@ -9,10 +46,10 @@ const loadConfig = (): Config => {
     // Check if running in Docker and CONFIG_FILE environment variable is set
     if (process.env.CONFIG_FILE && fs.existsSync('/.dockerenv')) {
         configPath = process.env.CONFIG_FILE;
-        console.log(`Running in Docker: Using config file from environment variable: ${configPath}`);
+        logger.info(`Running in Docker: Using config file from environment variable: ${configPath}`);
     } else {
         configPath = path.join(__dirname, '../../config.yaml');
-        console.log(`Using default config file: ${configPath}`);
+        logger.info(`Using default config file: ${configPath}`);
     }
 
     try {
@@ -51,10 +88,11 @@ const loadConfig = (): Config => {
             config.mqtt.port = port;
         }
 
-        console.log(`Configuration loaded successfully with ${Object.keys(config.cameras).length} cameras`);
+        logger.info(`Configuration loaded successfully with ${Object.keys(config.cameras).length} cameras`);
+        logger.debug(`Configuration summary: ${JSON.stringify(sanitizeConfig(config), null, 2)}`);
         return config;
     } catch (e) {
-        console.error('Error loading configuration:', e);
+        logger.error('Error loading configuration: ' + e);
         process.exit(20);
     }
 };
@@ -66,10 +104,29 @@ function processCameraConfig(config: Config) {
             throw new Error(`Invalid camera configuration for ${name}: Missing endpoint`);
         }
 
-        // Support both 'prompt' and 'prompts' fields
         if (!camera.prompt) {
             throw new Error(`Invalid camera configuration for ${name}: Missing prompt`);
         }
+
+        // Set defaults for multi-capture settings
+        if (camera.captures === undefined) {
+            camera.captures = 1;
+        }
+
+        if (camera.interval === undefined) {
+            camera.interval = 1000;
+        }
+
+        // Validate multi-capture settings
+        if (camera.captures < 1) {
+            throw new Error(`Invalid camera configuration for ${name}: captures must be at least 1`);
+        }
+
+        if (camera.interval < 0) {
+            throw new Error(`Invalid camera configuration for ${name}: interval must be non-negative`);
+        }
+
+        logger.debug(`Camera ${name}: ${camera.captures} capture(s) with ${camera.interval}ms intervals from ${sanitizeRtspUrl(camera.endpoint)}`);
 
         // Auto-generate full response_format structure if simplified format is provided
         if (!camera.response_format && camera.output && typeof camera.output === 'object') {

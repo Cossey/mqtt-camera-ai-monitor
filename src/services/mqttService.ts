@@ -14,14 +14,19 @@ export class MqttService extends EventEmitter {
         super();
         this.config = config;
         logger.info('Initializing MQTT service...');
-        logger.info(`Base topic configured as: "${this.config.basetopic}"`);
-        logger.info(`Expected topic structure: ${this.config.basetopic}/<cameraname>/<topicname>`);
+        logger.debug(`Base topic configured as: "${this.config.basetopic}"`);
+        logger.debug(`Expected topic structure: ${this.config.basetopic}/<cameraname>/<topicname>`);
         this.initializeConnection();
+    }
+
+    private sanitizeMqttConfig(): string {
+        return `mqtt://${this.config.user ? '*****' : 'anonymous'}:*****@${this.config.server}:${this.config.port}`;
     }
 
     private initializeConnection() {
         try {
             logger.info(`Connecting to MQTT broker at ${this.config.server}:${this.config.port}`);
+            logger.debug(`MQTT connection string: ${this.sanitizeMqttConfig()}`);
 
             const onlineTopic = `${this.config.basetopic}/online`;
 
@@ -55,8 +60,8 @@ export class MqttService extends EventEmitter {
                 const triggerPattern = `${this.config.basetopic}/+/trigger`;
                 const allPattern = `${this.config.basetopic}/#`; // Subscribe to everything for debugging
 
-                logger.info(`Subscribing to trigger pattern: "${triggerPattern}"`);
-                logger.info(`Subscribing to debug pattern: "${allPattern}"`);
+                logger.debug(`Subscribing to trigger pattern: "${triggerPattern}"`);
+                logger.debug(`Subscribing to debug pattern: "${allPattern}"`);
 
                 this.subscribe(triggerPattern);
                 this.subscribe(allPattern); // This will help us see all messages
@@ -78,8 +83,16 @@ export class MqttService extends EventEmitter {
             });
 
             this.client.on('message', (topic, message) => {
-                logger.info(`Received MQTT message - Topic: "${topic}", Message: "${message.toString()}"`);
-                this.handleMessage(topic, message.toString());
+                // Check if this is a binary image topic to avoid logging binary data
+                const isBinaryTopic = this.isBinaryImageTopic(topic);
+
+                if (isBinaryTopic) {
+                    logger.debug(`Received MQTT message - Topic: "${topic}", Binary data: ${message.length} bytes`);
+                } else {
+                    logger.info(`Received MQTT message - Topic: "${topic}", Message: "${message.toString()}"`);
+                }
+
+                this.handleMessage(topic, message.toString(), isBinaryTopic);
             });
         } catch (error) {
             logger.error(`Failed to initialize MQTT connection: ${error}. Retrying in ${this.reconnectInterval}ms...`);
@@ -87,8 +100,19 @@ export class MqttService extends EventEmitter {
         }
     }
 
-    private handleMessage(topic: string, message: string) {
-        logger.info(`Processing message - Topic: "${topic}", Message: "${message}"`);
+    private isBinaryImageTopic(topic: string): boolean {
+        // Check if topic ends with /image (binary image data)
+        return topic.endsWith('/image');
+    }
+
+    private handleMessage(topic: string, message: string, isBinaryTopic: boolean = false) {
+        // Don't process binary image topics as they're not meant for triggering
+        if (isBinaryTopic) {
+            logger.debug(`Ignoring binary image topic: "${topic}"`);
+            return;
+        }
+
+        logger.debug(`Processing message - Topic: "${topic}", Message: "${message}"`);
 
         // Check if topic starts with our configured basetopic
         if (!topic.startsWith(this.config.basetopic + '/')) {
@@ -200,7 +224,7 @@ export class MqttService extends EventEmitter {
     }
 
     public subscribeToSpecificCameras(cameras: Record<string, any>) {
-        logger.info('Subscribing to specific camera trigger topics...');
+        logger.debug('Subscribing to specific camera trigger topics...');
         Object.keys(cameras).forEach((cameraName) => {
             const triggerTopic = `${this.config.basetopic}/${cameraName}/trigger`;
             logger.info(`Subscribing to specific trigger topic: "${triggerTopic}"`);

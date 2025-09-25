@@ -12,8 +12,8 @@ export class AiService {
         this.endpoint = endpoint;
         this.apiToken = apiToken;
         this.model = model;
-        logger.info(`AI Service initialized with endpoint: ${endpoint}`);
-        logger.info(`AI Service using model: ${model}`);
+        logger.debug(`AI Service initialized with endpoint: ${endpoint}`);
+        logger.debug(`AI Service using model: ${model}`);
     }
 
     public async sendImageAndPrompt(
@@ -71,6 +71,95 @@ export class AiService {
             });
 
             logger.info(`AI response received successfully`);
+            logger.debug(`AI response status: ${response.status}`);
+            logger.debug(`AI response data: ${JSON.stringify(response.data)}`);
+
+            return response.data;
+        } catch (error: unknown) {
+            logger.error(`AI service error: ${error}`);
+
+            // Type guard for AxiosError
+            if (error instanceof AxiosError) {
+                logger.error(`AI service HTTP error status: ${error.response?.status}`);
+                logger.error(`AI service HTTP error data: ${JSON.stringify(error.response?.data)}`);
+            } else if (error instanceof Error) {
+                logger.error(`AI service error message: ${error.message}`);
+            }
+
+            throw error;
+        }
+    }
+
+    public async sendImagesAndPrompt(
+        imagePaths: string[],
+        prompt: string,
+        responseFormat?: ResponseFormatSchema
+    ): Promise<AiResponse> {
+        logger.info(`Preparing to send ${imagePaths.length} image(s) with prompt: "${prompt}"`);
+
+        if (!imagePaths || imagePaths.length === 0) {
+            throw new Error('At least one image path must be provided');
+        }
+
+        try {
+            // Build content array with text prompt first
+            const content: any[] = [
+                {
+                    type: 'text',
+                    text: imagePaths.length > 1
+                        ? `${prompt}\n\nNote: You are being provided with ${imagePaths.length} sequential images captured in chronological order. Analyze them to understand any changes, movement, or progression across the sequence.`
+                        : prompt,
+                }
+            ];
+
+            // Add images in order
+            for (let i = 0; i < imagePaths.length; i++) {
+                const imagePath = imagePaths[i];
+                logger.debug(`Reading image file ${i + 1}/${imagePaths.length}: ${imagePath}`);
+
+                const imageBuffer = fs.readFileSync(imagePath);
+                const base64Image = imageBuffer.toString('base64');
+
+                logger.debug(`Image ${i + 1} encoded to base64, size: ${base64Image.length} characters`);
+
+                content.push({
+                    type: 'image_url',
+                    image_url: {
+                        url: `data:image/jpeg;base64,${base64Image}`,
+                    },
+                });
+            }
+
+            // Prepare the OpenAI chat completions request
+            const requestBody: any = {
+                model: this.model,
+                messages: [
+                    {
+                        role: 'user',
+                        content: content,
+                    },
+                ],
+                max_tokens: 300,
+            };
+
+            // Add response_format if provided
+            if (responseFormat) {
+                requestBody.response_format = responseFormat;
+                logger.debug(`Using structured output with schema: ${responseFormat.json_schema.name}`);
+            }
+
+            logger.info(`Sending request to AI endpoint: ${this.endpoint}`);
+            logger.debug(`Request body prepared with model: ${requestBody.model} and ${imagePaths.length} image(s)`);
+
+            const response = await axios.post(this.endpoint, requestBody, {
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${this.apiToken}`,
+                },
+                timeout: 120000, // Increase timeout for multiple images
+            });
+
+            logger.info(`AI response received successfully for ${imagePaths.length} image(s)`);
             logger.debug(`AI response status: ${response.status}`);
             logger.debug(`AI response data: ${JSON.stringify(response.data)}`);
 

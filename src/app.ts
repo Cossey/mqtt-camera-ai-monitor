@@ -35,26 +35,42 @@ async function handleTrigger(cameraName: string) {
     const cameraConfig = config.cameras[cameraName];
 
     if (cameraConfig) {
-        let imagePath: string | null = null;
+        let imagePaths: string[] = [];
 
         try {
-            logger.info(`Capturing image from camera: ${cameraName} at ${cameraConfig.endpoint}`);
-            imagePath = await cameraService.captureImage(cameraConfig.endpoint);
-            logger.info(`Image captured successfully: ${imagePath}`);
+            const captures = cameraConfig.captures || 1;
+            const interval = cameraConfig.interval || 1000;
 
-            // Read the image file as binary data for MQTT publishing
-            logger.info(`Reading image file for MQTT publishing...`);
-            const imageBuffer = fs.readFileSync(imagePath);
-            logger.info(`Image read as binary, size: ${imageBuffer.length} bytes`);
+            logger.info(`Starting image capture for camera: ${cameraName} (${captures} captures, ${interval}ms intervals)`);
 
-            // Publish the binary image data to MQTT (retained)
-            mqttService.publishBinary(`${config.mqtt.basetopic}/${cameraName}/image`, imageBuffer, true);
-            logger.info(`Image binary data published to MQTT for camera: ${cameraName}`);
+            // Capture single or multiple images based on configuration
+            if (captures === 1) {
+                // Backwards compatibility: single image capture
+                const imagePath = await cameraService.captureImage(cameraConfig.endpoint);
+                imagePaths = [imagePath];
+                logger.info(`Single image captured successfully: ${imagePath}`);
+            } else {
+                // Multi-image capture
+                imagePaths = await cameraService.captureMultipleImages(
+                    cameraConfig.endpoint,
+                    captures,
+                    interval
+                );
+                logger.info(`${imagePaths.length} images captured successfully`);
+            }
 
-            // Now send to AI service for processing
-            logger.info(`Sending image to AI service for processing...`);
-            const aiResponse = await aiService.sendImageAndPrompt(
-                imagePath,
+            // Publish the first (or only) image as binary data to MQTT (retained)
+            logger.debug(`Reading primary image file for MQTT publishing...`);
+            const primaryImageBuffer = fs.readFileSync(imagePaths[0]);
+            logger.info(`Primary image read as binary, size: ${primaryImageBuffer.length} bytes`);
+
+            mqttService.publishBinary(`${config.mqtt.basetopic}/${cameraName}/image`, primaryImageBuffer, true);
+            logger.info(`Primary image binary data published to MQTT for camera: ${cameraName}`);
+
+            // Send all images to AI service for processing
+            logger.info(`Sending ${imagePaths.length} image(s) to AI service for processing...`);
+            const aiResponse = await aiService.sendImagesAndPrompt(
+                imagePaths,
                 cameraConfig.prompt,
                 cameraConfig.response_format
             );
@@ -69,11 +85,9 @@ async function handleTrigger(cameraName: string) {
             // Publish AI response with retention
             mqttService.publish(`${config.mqtt.basetopic}/${cameraName}/ai`, aiContent, true);
 
-            // Clean up the temporary image file
-            if (imagePath) {
-                cameraService.cleanupImageFile(imagePath);
-                imagePath = null; // Mark as cleaned up
-            }
+            // Clean up all temporary image files
+            await cameraService.cleanupImageFiles(imagePaths);
+            logger.debug(`Cleaned up ${imagePaths.length} temporary image file(s)`);
 
             // Reset trigger state to "NO" (retained)
             mqttService.publish(`${config.mqtt.basetopic}/${cameraName}/trigger`, 'NO', true);
@@ -82,10 +96,8 @@ async function handleTrigger(cameraName: string) {
         } catch (error) {
             logger.error(`Error processing trigger for camera ${cameraName}: ${error}`);
 
-            // Clean up the temporary image file even on error
-            if (imagePath) {
-                cameraService.cleanupImageFile(imagePath);
-            }
+            // Clean up any temporary image files on error
+            await cameraService.cleanupImageFiles(imagePaths);
 
             // Reset trigger state even on error
             mqttService.publish(`${config.mqtt.basetopic}/${cameraName}/trigger`, 'NO', true);

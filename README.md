@@ -2,13 +2,13 @@
 
 ## Overview
 
-The MQTT Camera AI Monitor is a TypeScript/Node.js application that monitors MQTT channels for trigger commands, captures high-quality images from RTSP cameras using FFmpeg, and processes them through OpenAI-compatible AI endpoints for analysis.
-The application is designed to support multiple cameras and can be easily configured through a YAML configuration file.
+The MQTT Camera AI Monitor is a TypeScript/Node.js application that monitors MQTT channels for trigger commands, captures high-quality images from RTSP cameras using FFmpeg, and processes them through OpenAI-compatible AI endpoints for analysis. The application supports both single and multi-image capture for advanced motion detection and temporal analysis.
 
 ## Features
 
 - **MQTT Integration**: Monitors MQTT channels for trigger commands with automatic reconnection
 - **RTSP Camera Support**: Captures high-quality images from RTSP camera streams using FFmpeg
+- **Multi-Image Capture**: Sequential image capture with configurable intervals for motion analysis
 - **AI Processing**: Sends captured images to OpenAI-compatible endpoints for analysis
 - **Binary Image Publishing**: Publishes captured images as binary data to MQTT topics
 - **Status Monitoring**: Publishes online/offline status via Last Will and Testament
@@ -16,6 +16,7 @@ The application is designed to support multiple cameras and can be easily config
 - **Graceful Shutdown**: Properly handles shutdown signals and cleanup
 - **Docker Support**: Runs in containerized environments with configurable file paths
 - **Comprehensive Logging**: Detailed logging for monitoring and debugging
+- **Structured Output**: Optional JSON schema-based responses for consistent data format
 
 ## How it Works
 
@@ -30,19 +31,28 @@ The application uses the following topic structure: `<basetopic>/<cameraname>/<t
 #### Camera Topics (for each configured camera)
 
 - **`<basetopic>/<camera>/trigger`** - Trigger topic (set to "YES" to start analysis, automatically resets to "NO")
-- **`<basetopic>/<camera>/image`** - Binary image data (JPEG format, retained)
-- **`<basetopic>/<camera>/ai`** - AI analysis response (text, retained)
+- **`<basetopic>/<camera>/image`** - Binary image data (JPEG format, retained) - First captured image
+- **`<basetopic>/<camera>/ai`** - AI analysis response (text or JSON, retained)
 
 ### Workflow
 
 1. **Initialization**: Application connects to MQTT broker and initializes camera topics
 2. **Trigger**: Set `<basetopic>/<camera>/trigger` to "YES" to start analysis
-3. **Image Capture**: Application captures high-quality image from RTSP camera
-4. **Image Publishing**: Binary image data is published to `<basetopic>/<camera>/image`
-5. **AI Processing**: Image is sent to AI endpoint with configured prompt
+3. **Image Capture**: Application captures one or multiple high-quality images from RTSP camera
+4. **Image Publishing**: Binary data of the first captured image is published to `<basetopic>/<camera>/image`
+5. **AI Processing**: All captured images are sent to AI endpoint with configured prompt
 6. **Result Publishing**: AI response is published to `<basetopic>/<camera>/ai`
 7. **Reset**: Trigger topic is automatically reset to "NO"
-8. **Cleanup**: Temporary image files are automatically deleted
+8. **Cleanup**: All temporary image files are automatically deleted
+
+### Multi-Image Capture
+
+The application supports capturing multiple sequential images to provide AI with temporal context for motion detection and analysis:
+
+- **Single Image Mode** (default): Traditional single snapshot capture
+- **Multi-Image Mode**: Capture 2-10+ sequential images with configurable intervals
+- **AI Context**: Multiple images are sent in chronological order with enhanced prompts
+- **Motion Analysis**: AI can detect movement, direction, and changes across the sequence
 
 ## Installation & Setup
 
@@ -51,11 +61,62 @@ The application uses the following topic structure: `<basetopic>/<cameraname>/<t
 - Node.js 18+ (for bare metal installation)
 - FFmpeg (for camera image capture)
 - MQTT broker
-- OpenAI-compatible API endpoint
+- OpenAI-compatible API endpoint with vision support
 
-### Configuration
+## Camera Configuration Options
 
 Create a `config.yaml` file based on the provided `config.yaml.sample`.
+
+### Basic Settings
+
+- **`endpoint`** (required): RTSP stream URL with authentication
+- **`prompt`** (required): Text prompt for AI analysis
+
+### Multi-Image Settings
+
+- **`captures`** (optional): Number of images to capture (default: 1, range: 1-10+)
+- **`interval`** (optional): Milliseconds between captures (default: 1000, minimum: 0)
+
+### Advanced Settings
+
+- **`output`** (optional): Structured output schema for consistent JSON responses
+
+### Configuration Examples
+
+#### Minimal Single Image
+
+```yaml
+simple_camera:
+  endpoint: rtsp://user:pass@camera/stream
+  prompt: "What do you see?"
+```
+
+#### Motion Detection with Multiple Images
+
+```yaml
+motion_camera:
+  endpoint: rtsp://user:pass@camera/stream
+  captures: 4
+  interval: 2000
+  prompt: "Detect and analyze movement across these 4 sequential images."
+```
+
+#### Structured Output with Multiple Images
+
+```yaml
+security_camera:
+  endpoint: rtsp://user:pass@camera/stream
+  captures: 3
+  interval: 5000
+  prompt: "Analyze security footage for people and vehicle activity."
+  output:
+    PeopleDetected:
+      type: string
+      enum: ["Yes", "No", "Unknown"]
+    VehicleMovement:
+      type: string
+      enum: ["Entering", "Leaving", "None", "Unknown"]
+```
 
 ## Deployment Options
 
@@ -93,8 +154,6 @@ docker run -d \
 
 #### Using Custom Config Location (Docker)
 
-Set the `CONFIG_FILE` environment variable to specify a custom config file location:
-
 ```bash
 docker run -d \
   --name mqtt-camera-monitor \
@@ -118,42 +177,60 @@ services:
     restart: unless-stopped
 ```
 
-#### Building from Source
+## Usage Examples
+
+### Basic Single Image Analysis
 
 ```bash
-# Clone the repository
-git clone <repository-url>
-cd mqtt-camera-ai-monitor
+# Trigger analysis
+mosquitto_pub -h mqtt-server -t "mqttcim/garage/trigger" -m "YES"
 
-# Build the Docker image
-docker build -t mqtt-camera-ai-monitor .
-
-# Run the container
-docker run -d \
-  --name mqtt-camera-monitor \
-  -v /path/to/your/config.yaml:/usr/src/app/config.yaml \
-  mqtt-camera-ai-monitor
+# Monitor results
+mosquitto_sub -h mqtt-server -t "mqttcim/garage/#"
 ```
 
-## Usage Example
+### Multi-Image Motion Detection
 
-1. **Start the application** (bare metal or Docker)
-2. **Monitor the logs** to confirm MQTT connection and camera initialization
-3. **Trigger analysis** by publishing "YES" to the trigger topic:
+```bash
+# Trigger 5-image sequence analysis
+mosquitto_pub -h mqtt-server -t "mqttcim/driveway/trigger" -m "YES"
 
-   ```bash
-   mosquitto_pub -h your-mqtt-server -t "mqttcim/frontdoor/trigger" -m "YES"
-   ```
+# The system will:
+# 1. Capture 5 images over 15 seconds (3s intervals)
+# 2. Send all images to AI for motion analysis
+# 3. Publish results to mqttcim/driveway/ai
+```
 
-4. **Monitor results** on the image and AI topics:
+### Monitoring Application Status
 
-   ```bash
-   # Subscribe to all topics for a camera
-   mosquitto_sub -h your-mqtt-server -t "mqttcim/frontdoor/#"
-   
-   # Check application status
-   mosquitto_sub -h your-mqtt-server -t "mqttcim/online"
-   ```
+```bash
+# Check if application is online
+mosquitto_sub -h mqtt-server -t "mqttcim/online"
+
+# Monitor all activity
+mosquitto_sub -h mqtt-server -t "mqttcim/#"
+```
+
+## Multi-Image Capture Benefits
+
+### Motion Detection
+
+- **Direction Analysis**: Detect people/vehicles entering or leaving
+- **Speed Estimation**: Understand movement speed across frames
+- **Path Tracking**: Follow object movement through the scene
+
+### Context Understanding
+
+- **Activity Patterns**: Understand what happened over time
+- **Change Detection**: Identify what changed between frames
+- **Event Sequencing**: Understand the order of events
+
+### Use Cases
+
+- **Security Monitoring**: Detect intrusions with movement context
+- **Traffic Analysis**: Monitor vehicle flow and parking changes
+- **Wildlife Observation**: Track animal behavior over time
+- **Package Delivery**: Detect delivery events with full context
 
 ## Monitoring & Troubleshooting
 
@@ -167,15 +244,17 @@ docker run -d \
 
 - **MQTT Connection**: Check server address, credentials, and network connectivity
 - **Camera Access**: Verify RTSP URLs and camera credentials
-- **AI API**: Confirm endpoint URL, API token, and model availability
-- **File Permissions**: Ensure write permissions for temporary files
+- **AI API**: Confirm endpoint URL, API token, and model supports vision
+- **Multi-Image Timeouts**: Increase AI timeout for multiple image processing
+- **Disk Space**: Ensure adequate space for temporary image files
+- **Memory Usage**: Multiple large images may require more RAM
 
-### Health Checks
+### Performance Considerations
 
-Monitor the `<basetopic>/online` topic to verify application status:
-
-- **"YES"**: Application is running and connected
-- **"NO"**: Application is offline (via Last Will and Testament)
+- **Capture Duration**: Total time = (captures - 1) × interval
+- **AI Processing Time**: Increases with number of images
+- **Network Bandwidth**: Multiple images require more upload bandwidth
+- **Storage**: Temporary files are automatically cleaned up
 
 ## Configuration Reference
 
@@ -196,7 +275,19 @@ Monitor the `<basetopic>/online` topic to verify application status:
 ### Camera Settings
 
 - `endpoint`: RTSP stream URL with credentials
-- `prompt`: Text prompt for AI analysis of camera images
+- `prompt`: Text prompt for AI analysis
+- `captures`: Number of sequential images (1-10+, default: 1)
+- `interval`: Milliseconds between captures (≥0, default: 1000)
+- `output`: Optional structured output schema
+
+> Refer to [Structured model outputs - OpenAI API](https://platform.openai.com/docs/guides/structured-outputs) for more information about the output schema.
+
+### Multi-Image Guidelines
+
+- **Optimal Captures**: 3-5 images for most motion detection scenarios
+- **Interval Timing**: 1-5 seconds depending on expected motion speed
+- **Total Duration**: Keep under 30 seconds to avoid timeout issues
+- **Prompt Design**: Include context about sequential analysis in prompts
 
 ## Contributing
 
@@ -218,4 +309,10 @@ For issues and questions:
 - Check the application logs for error details
 - Verify configuration settings
 - Ensure network connectivity to MQTT broker and AI endpoint
+- Test with single image before using multi-image capture
+- Monitor disk space and memory usage for multi-image scenarios
 - Open an issue on the project repository
+
+## AI Notice
+
+Vibe-coded in Claude Sonnet 4. No cap.

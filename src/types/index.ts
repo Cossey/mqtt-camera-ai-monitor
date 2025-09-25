@@ -10,7 +10,7 @@ export interface MqttConfig {
 export interface OpenAiConfig {
     endpoint: string;
     api_token: string;
-    model: string; // Add model configuration
+    model: string;
 }
 
 export interface JsonSchemaProperty {
@@ -38,8 +38,10 @@ export interface ResponseFormatSchema {
 export interface CameraConfig {
     endpoint: string;
     prompt: string;
-    output?: Record<string, JsonSchemaProperty>; // Simplified user provided structured output schema
-    response_format?: ResponseFormatSchema; // Fully generated structured output response format schema
+    captures?: number; // Number of images to capture (default: 1)
+    interval?: number; // Milliseconds between captures (default: 1000)
+    output?: Record<string, JsonSchemaProperty>;
+    response_format?: ResponseFormatSchema;
 }
 
 export interface Config {
