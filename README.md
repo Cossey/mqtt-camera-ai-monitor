@@ -234,41 +234,41 @@ services:
 
 ```bash
 # Trigger analysis
-mosquitto_pub -h mqtt-server -t "mqttcim/garage/trigger" -m "YES"
+mosquitto_pub -h mqtt-server -t "mqttcaim/garage/trigger" -m "YES"
 
 # Monitor results and status
-mosquitto_sub -h mqtt-server -t "mqttcim/garage/#"
+mosquitto_sub -h mqtt-server -t "mqttcaim/garage/#"
 ```
 
 ### Multi-Image Motion Detection
 
 ```bash
 # Trigger 5-image sequence analysis
-mosquitto_pub -h mqtt-server -t "mqttcim/driveway/trigger" -m "YES"
+mosquitto_pub -h mqtt-server -t "mqttcaim/driveway/trigger" -m "YES"
 
 # The system will:
 # 1. Capture 5 images over 15 seconds (3s intervals)
 # 2. Send all images to AI for motion analysis
-# 3. Publish results to mqttcim/driveway/ai
+# 3. Publish results to mqttcaim/driveway/ai
 ```
 
 ### Monitoring Camera Status and Statistics
 
 ```bash
 # Watch real-time status updates
-mosquitto_sub -h mqtt-server -t "mqttcim/driveway/status"
+mosquitto_sub -h mqtt-server -t "mqttcaim/driveway/status"
 
 # Monitor performance statistics
-mosquitto_sub -h mqtt-server -t "mqttcim/driveway/stats"
+mosquitto_sub -h mqtt-server -t "mqttcaim/driveway/stats"
 
 # Check if application is online
-mosquitto_sub -h mqtt-server -t "mqttcim/online"
+mosquitto_sub -h mqtt-server -t "mqttcaim/online"
 
 # Monitor all activity for a camera
-mosquitto_sub -h mqtt-server -t "mqttcim/driveway/#"
+mosquitto_sub -h mqtt-server -t "mqttcaim/driveway/#"
 
 # Monitor everything
-mosquitto_sub -h mqtt-server -t "mqttcim/#"
+mosquitto_sub -h mqtt-server -t "mqttcaim/#"
 ```
 
 ## Multi-Image Capture Benefits
@@ -317,7 +317,7 @@ Use the `/stats` topic to monitor camera performance:
 
 ```bash
 # Get current stats for a camera
-mosquitto_sub -h mqtt-server -t "mqttcim/camera1/stats" -C 1
+mosquitto_sub -h mqtt-server -t "mqttcaim/camera1/stats" -C 1
 
 # Example output:
 {

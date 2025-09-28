@@ -25,5 +25,5 @@
     "@types/js-yaml": "^4.0.5"
   },
   "author": "Stewart Cossey",
-  "license": "MIT"
+  "license": "BSD-3-Clause"
 }
