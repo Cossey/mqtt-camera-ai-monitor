@@ -1,6 +1,6 @@
 import { MqttClient, connect } from 'mqtt';
 import { EventEmitter } from 'events';
-import { MqttConfig } from '../types';
+import { MqttConfig, CameraStats } from '../types';
 import { logger } from '../utils/logger';
 
 export class MqttService extends EventEmitter {
@@ -202,24 +202,41 @@ export class MqttService extends EventEmitter {
         }
     }
 
+    public publishStats(cameraName: string, stats: CameraStats) {
+        const topic = `${this.config.basetopic}/${cameraName}/stats`;
+        const message = JSON.stringify(stats);
+        this.publish(topic, message, true); // Retained
+    }
+
+    public publishStatus(cameraName: string, status: string) {
+        const topic = `${this.config.basetopic}/${cameraName}/status`;
+        this.publish(topic, status, true); // Retained
+    }
+
     public initializeChannels(cameras: Record<string, any>) {
         logger.info(`Initializing MQTT channels for ${Object.keys(cameras).length} cameras...`);
-        logger.info(`Using basetopic: "${this.config.basetopic}"`);
+        logger.debug(`Using basetopic: "${this.config.basetopic}"`);
 
         Object.keys(cameras).forEach((cameraName) => {
             const triggerTopic = `${this.config.basetopic}/${cameraName}/trigger`;
             const imageTopic = `${this.config.basetopic}/${cameraName}/image`;
             const aiTopic = `${this.config.basetopic}/${cameraName}/ai`;
+            const statsTopic = `${this.config.basetopic}/${cameraName}/stats`;
+            const statusTopic = `${this.config.basetopic}/${cameraName}/status`;
 
             logger.info(`Initializing channels for camera: "${cameraName}"`);
             logger.debug(`Trigger topic: "${triggerTopic}"`);
             logger.debug(`Image topic: "${imageTopic}"`);
             logger.debug(`AI topic: "${aiTopic}"`);
+            logger.debug(`Stats topic: "${statsTopic}"`);
+            logger.debug(`Status topic: "${statusTopic}"`);
 
             // Initialize channels
             this.publish(triggerTopic, 'NO', true);
             this.publishBinary(imageTopic, Buffer.alloc(0), true); // Empty binary data
             this.publish(aiTopic, '', true);
+            this.publish(statsTopic, JSON.stringify({}), true); // Empty stats object
+            this.publish(statusTopic, 'Idle', true); // Initial status
         });
         logger.info('Channel initialization complete');
     }

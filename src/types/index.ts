@@ -69,3 +69,18 @@ export interface AiResponse {
         total_tokens: number;
     };
 }
+
+export interface CameraStats {
+    lastErrorDate?: string; // ISO datetime string
+    lastErrorType?: string;
+    lastSuccessDate?: string; // ISO datetime string
+    lastAiProcessTime?: number; // seconds
+    lastTotalProcessTime?: number; // seconds
+}
+
+export interface CameraStatusManager {
+    updateStatus(cameraName: string, status: string): void;
+    updateStats(cameraName: string, stats: Partial<CameraStats>): void;
+    getStats(cameraName: string): CameraStats;
+    getStatus(cameraName: string): string;
+}
