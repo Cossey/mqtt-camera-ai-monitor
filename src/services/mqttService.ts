@@ -56,15 +56,10 @@ export class MqttService extends EventEmitter {
                 this.publish(onlineTopic, 'YES', true);
                 logger.info(`Published online status to: ${onlineTopic}`);
 
-                // Subscribe to both wildcard pattern and debug with all messages
+                // Only subscribe to trigger pattern - not all topics
                 const triggerPattern = `${this.config.basetopic}/+/trigger`;
-                const allPattern = `${this.config.basetopic}/#`; // Subscribe to everything for debugging
-
                 logger.debug(`Subscribing to trigger pattern: "${triggerPattern}"`);
-                logger.debug(`Subscribing to debug pattern: "${allPattern}"`);
-
                 this.subscribe(triggerPattern);
-                this.subscribe(allPattern); // This will help us see all messages
 
                 this.emit('connected');
             });
@@ -89,7 +84,7 @@ export class MqttService extends EventEmitter {
                 if (isBinaryTopic) {
                     logger.debug(`Received MQTT message - Topic: "${topic}", Binary data: ${message.length} bytes`);
                 } else {
-                    logger.info(`Received MQTT message - Topic: "${topic}", Message: "${message.toString()}"`);
+                    logger.debug(`Received MQTT message - Topic: "${topic}", Message: "${message.toString()}"`);
                 }
 
                 this.handleMessage(topic, message.toString(), isBinaryTopic);
@@ -122,6 +117,12 @@ export class MqttService extends EventEmitter {
 
         // Remove the basetopic from the beginning to get the remaining path
         const targetTopic = topic.substring(this.config.basetopic.length + 1);
+
+        // Check if this is the online status topic - ignore it
+        if (targetTopic === 'online') {
+            logger.debug(`Ignoring online status topic: "${topic}"`);
+            return;
+        }
 
         // Expected format after basetopic removal: <cameraname>/<topicname>
         const topicParts = targetTopic.split('/');
