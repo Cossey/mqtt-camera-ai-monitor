@@ -11,11 +11,13 @@ The MQTT Camera AI Monitor is a TypeScript/Node.js application that monitors MQT
 - **Multi-Image Capture**: Sequential image capture with configurable intervals for motion analysis
 - **AI Processing**: Sends captured images to OpenAI-compatible endpoints for analysis
 - **Binary Image Publishing**: Publishes captured images as binary data to MQTT topics
+- **Real-time Status Tracking**: Live status updates during processing (e.g., "Taking snapshot 2/4")
+- **Comprehensive Statistics**: Detailed performance metrics and error tracking per camera
 - **Status Monitoring**: Publishes online/offline status via Last Will and Testament
 - **Automatic Cleanup**: Removes temporary image files to prevent disk space issues
 - **Graceful Shutdown**: Properly handles shutdown signals and cleanup
 - **Docker Support**: Runs in containerized environments with configurable file paths
-- **Comprehensive Logging**: Detailed logging for monitoring and debugging
+- **Comprehensive Logging**: Detailed logging with configurable levels for monitoring and debugging
 - **Structured Output**: Optional JSON schema-based responses for consistent data format
 
 ## How it Works
@@ -33,17 +35,60 @@ The application uses the following topic structure: `<basetopic>/<cameraname>/<t
 - **`<basetopic>/<camera>/trigger`** - Trigger topic (set to "YES" to start analysis, automatically resets to "NO")
 - **`<basetopic>/<camera>/image`** - Binary image data (JPEG format, retained) - First captured image
 - **`<basetopic>/<camera>/ai`** - AI analysis response (text or JSON, retained)
+- **`<basetopic>/<camera>/status`** - Current processing status (text, retained)
+- **`<basetopic>/<camera>/stats`** - Performance statistics and error tracking (JSON, retained)
+
+### Camera Status Values
+
+The `/status` topic provides real-time updates during processing:
+
+- **`"Idle"`** - Camera ready for triggers
+- **`"Starting image capture"`** - Beginning capture process
+- **`"Taking snapshot"`** - Single image capture in progress
+- **`"Taking snapshot X/Y"`** - Multi-image capture progress (e.g., "Taking snapshot 2/4")
+- **`"Waiting for next capture (X/Y)"`** - Interval delay between captures
+- **`"Publishing image"`** - Uploading image to MQTT
+- **`"Processing with AI"`** - Sending to AI service for analysis
+- **`"Publishing AI response"`** - Uploading AI results to MQTT
+- **`"Cleaning up"`** - Removing temporary files
+- **`"Complete"`** - Successfully finished processing
+- **`"Error"`** - Error occurred during processing
+- **`"Offline"`** - Service shutting down
+
+### Camera Statistics
+
+The `/stats` topic publishes a JSON object with performance metrics:
+
+```json
+{
+    "lastErrorDate": "2023-01-01T12:00:00.000Z",
+    "lastErrorType": "Connection timeout",
+    "lastSuccessDate": "2023-01-01T12:05:00.000Z",
+    "lastAiProcessTime": 2.5,
+    "lastTotalProcessTime": 8.2
+}
+```
+
+**Statistics Properties:**
+
+- **`lastErrorDate`** - ISO timestamp of most recent error
+- **`lastErrorType`** - Description of the last error that occurred
+- **`lastSuccessDate`** - ISO timestamp of most recent successful processing
+- **`lastAiProcessTime`** - Time in seconds for AI processing only
+- **`lastTotalProcessTime`** - Total time in seconds from trigger to completion
 
 ### Workflow
 
 1. **Initialization**: Application connects to MQTT broker and initializes camera topics
 2. **Trigger**: Set `<basetopic>/<camera>/trigger` to "YES" to start analysis
-3. **Image Capture**: Application captures one or multiple high-quality images from RTSP camera
-4. **Image Publishing**: Binary data of the first captured image is published to `<basetopic>/<camera>/image`
-5. **AI Processing**: All captured images are sent to AI endpoint with configured prompt
-6. **Result Publishing**: AI response is published to `<basetopic>/<camera>/ai`
-7. **Reset**: Trigger topic is automatically reset to "NO"
-8. **Cleanup**: All temporary image files are automatically deleted
+3. **Status Updates**: Real-time status published to `<basetopic>/<camera>/status`
+4. **Image Capture**: Application captures one or multiple high-quality images from RTSP camera
+5. **Image Publishing**: Binary data of the first captured image is published to `<basetopic>/<camera>/image`
+6. **AI Processing**: All captured images are sent to AI endpoint with configured prompt
+7. **Result Publishing**: AI response is published to `<basetopic>/<camera>/ai`
+8. **Statistics Update**: Performance metrics published to `<basetopic>/<camera>/stats`
+9. **Reset**: Trigger topic is automatically reset to "NO"
+10. **Cleanup**: All temporary image files are automatically deleted
 
 ### Multi-Image Capture
 
@@ -53,6 +98,7 @@ The application supports capturing multiple sequential images to provide AI with
 - **Multi-Image Mode**: Capture 2-10+ sequential images with configurable intervals
 - **AI Context**: Multiple images are sent in chronological order with enhanced prompts
 - **Motion Analysis**: AI can detect movement, direction, and changes across the sequence
+- **Progress Tracking**: Status updates show capture progress (e.g., "Taking snapshot 3/5")
 
 ## Installation & Setup
 
@@ -139,6 +185,9 @@ security_camera:
 
    ```bash
    npm start
+
+   # With debug logging
+   LOG_LEVEL=debug npm start
    ```
 
 ### Docker
@@ -158,6 +207,7 @@ docker run -d \
 docker run -d \
   --name mqtt-camera-monitor \
   -e CONFIG_FILE=/app/config/custom-config.yaml \
+  -e LOG_LEVEL=debug \
   -v /path/to/your/config.yaml:/app/config/custom-config.yaml \
   kosdk/mqtt-camera-ai-monitor:latest
 ```
@@ -172,6 +222,7 @@ services:
     container_name: mqtt-camera-monitor
     environment:
       - CONFIG_FILE=/app/config/config.yaml
+      - LOG_LEVEL=info
     volumes:
       - ./config.yaml:/app/config/config.yaml
     restart: unless-stopped
@@ -185,7 +236,7 @@ services:
 # Trigger analysis
 mosquitto_pub -h mqtt-server -t "mqttcim/garage/trigger" -m "YES"
 
-# Monitor results
+# Monitor results and status
 mosquitto_sub -h mqtt-server -t "mqttcim/garage/#"
 ```
 
@@ -201,13 +252,22 @@ mosquitto_pub -h mqtt-server -t "mqttcim/driveway/trigger" -m "YES"
 # 3. Publish results to mqttcim/driveway/ai
 ```
 
-### Monitoring Application Status
+### Monitoring Camera Status and Statistics
 
 ```bash
+# Watch real-time status updates
+mosquitto_sub -h mqtt-server -t "mqttcim/driveway/status"
+
+# Monitor performance statistics
+mosquitto_sub -h mqtt-server -t "mqttcim/driveway/stats"
+
 # Check if application is online
 mosquitto_sub -h mqtt-server -t "mqttcim/online"
 
-# Monitor all activity
+# Monitor all activity for a camera
+mosquitto_sub -h mqtt-server -t "mqttcim/driveway/#"
+
+# Monitor everything
 mosquitto_sub -h mqtt-server -t "mqttcim/#"
 ```
 
@@ -234,11 +294,38 @@ mosquitto_sub -h mqtt-server -t "mqttcim/#"
 
 ## Monitoring & Troubleshooting
 
+### Environment Variables
+
+- **`LOG_LEVEL`**: Controls logging verbosity
+  - `error`: Only errors
+  - `warn`: Warnings and errors
+  - `info`: Info, warnings, and errors (default)
+  - `debug`: Debug, info, warnings, and errors
+  - `verbose`: Very detailed logging
+  - `silly`: Everything
+- **`CONFIG_FILE`**: Custom config file path (Docker only)
+
 ### Log Files
 
 - **Console output**: Real-time application logs
 - **error.log**: Error-level logs only
 - **combined.log**: All log levels
+
+### Performance Monitoring
+
+Use the `/stats` topic to monitor camera performance:
+
+```bash
+# Get current stats for a camera
+mosquitto_sub -h mqtt-server -t "mqttcim/camera1/stats" -C 1
+
+# Example output:
+{
+  "lastSuccessDate": "2023-10-15T14:30:25.123Z",
+  "lastAiProcessTime": 3.2,
+  "lastTotalProcessTime": 12.8
+}
+```
 
 ### Common Issues
 
@@ -307,6 +394,7 @@ This project is licensed under the BSD 3-Clause License. See the [LICENSE](LICEN
 For issues and questions:
 
 - Check the application logs for error details
+- Monitor camera `/status` and `/stats` topics for real-time information
 - Verify configuration settings
 - Ensure network connectivity to MQTT broker and AI endpoint
 - Test with single image before using multi-image capture

@@ -1,6 +1,6 @@
 {
   "name": "mqtt-camera-ai-monitor",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "description": "A tool to monitor MQTT channels, capture images from RTSP cameras, and interact with OpenAI.",
   "main": "dist/app.js",
   "scripts": {
